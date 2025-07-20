@@ -7,52 +7,60 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import IsolationForest
 import warnings
+from typing import Dict, List, Any, Tuple
+from collections import defaultdict
 warnings.filterwarnings('ignore')
 
 class CrisisDetectionSystem:
     def __init__(self):
         # Crisis keywords in Spanish
         self.crisis_keywords = {
-            'suicide': [
-                'suicidio', 'suicidarme', 'matarme', 'quitarme la vida', 
-                'acabar con todo', 'no quiero vivir', 'mejor muerto',
-                'terminar con mi vida', 'no vale la pena vivir'
-            ],
-            'self_harm': [
-                'cortarme', 'lastimarme', 'hacerme daño', 'autolesión',
-                'herirme', 'golpearme', 'castigarme físicamente'
-            ],
-            'hopelessness': [
-                'sin esperanza', 'no hay salida', 'todo está perdido',
-                'no puedo más', 'es inútil', 'nunca mejorará',
-                'no tiene sentido', 'estoy perdido', 'sin futuro'
-            ],
-            'isolation': [
-                'nadie me entiende', 'estoy solo', 'nadie me quiere',
-                'todos me odian', 'mejor desaparecer', 'invisible',
-                'no le importo a nadie', 'completamente solo'
-            ],
-            'overwhelming_pain': [
-                'dolor insoportable', 'no aguanto más', 'demasiado dolor',
-                'sufrimiento extremo', 'agonía', 'tortura emocional',
-                'dolor que no para', 'insoportable'
-            ]
-        }
-        
-        # Severity weights for different categories
-        self.severity_weights = {
-            'suicide': 1.0,
-            'self_harm': 0.8,
-            'hopelessness': 0.6,
-            'isolation': 0.4,
-            'overwhelming_pain': 0.7
+            'suicide_direct': {
+                'keywords': ['suicidio', 'suicidarme', 'quitarme la vida', 'acabar conmigo', 'matarme'],
+                'weight': 10,
+                'severity': 'CRÍTICO'
+            },
+            'suicide_indirect': {
+                'keywords': ['no quiero vivir', 'mejor muerto', 'sin mí estarían mejor', 'no vale la pena vivir'],
+                'weight': 8,
+                'severity': 'ALTO'
+            },
+            'self_harm': {
+                'keywords': ['cortarme', 'lastimarme', 'hacerme daño', 'autolesión', 'herirme'],
+                'weight': 7,
+                'severity': 'ALTO'
+            },
+            'hopelessness': {
+                'keywords': ['sin esperanza', 'no hay salida', 'todo está perdido', 'no puedo más', 'es inútil'],
+                'weight': 6,
+                'severity': 'MEDIO'
+            },
+            'isolation': {
+                'keywords': ['completamente solo', 'nadie me entiende', 'todos me abandonan', 'aislado'],
+                'weight': 4,
+                'severity': 'MEDIO'
+            },
+            'desperation': {
+                'keywords': ['desesperado', 'no aguanto', 'es insoportable', 'no puedo seguir'],
+                'weight': 5,
+                'severity': 'MEDIO'
+            }
         }
         
         # Protective factors
-        self.protective_factors = [
-            'familia', 'amigos', 'terapia', 'medicación', 'esperanza',
-            'futuro', 'metas', 'sueños', 'ayuda', 'apoyo', 'amor',
-            'razones para vivir', 'cosas buenas', 'mejorar'
+        self.protective_factors = {
+            'support': ['familia', 'amigos', 'apoyo', 'ayuda', 'acompañado'],
+            'coping': ['respirar', 'meditar', 'ejercicio', 'música', 'escribir'],
+            'hope': ['esperanza', 'futuro', 'mañana', 'mejorar', 'cambiar'],
+            'professional': ['psicólogo', 'terapeuta', 'doctor', 'medicamento', 'tratamiento']
+        }
+        
+        # Crisis escalation patterns
+        self.escalation_patterns = [
+            'increasing_frequency',  # More crisis messages over time
+            'increasing_severity',   # More severe language over time
+            'persistent_themes',     # Same crisis themes repeatedly
+            'declining_protective'   # Fewer protective factors mentioned
         ]
         
         # Initialize anomaly detector
@@ -70,19 +78,24 @@ class CrisisDetectionSystem:
         indicators_found = []
         
         # Check each crisis category
-        for category, keywords in self.crisis_keywords.items():
+        for category, data in self.crisis_keywords.items():
             category_score = 0
             category_indicators = []
             
-            for keyword in keywords:
+            for keyword in data['keywords']:
                 if keyword in text_clean:
-                    category_score += 1
-                    category_indicators.append(keyword)
+                    category_score += data['weight']
+                    category_indicators.append({
+                        'category': category,
+                        'keyword': keyword,
+                        'weight': data['weight'],
+                        'severity': data['severity']
+                    })
                     indicators_found.append(f"{category}: {keyword}")
             
             # Normalize by text length and apply severity weight
             if category_score > 0:
-                normalized_score = (category_score / len(text.split())) * self.severity_weights[category]
+                normalized_score = (category_score / len(text.split())) * data['weight']
                 crisis_scores[category] = normalized_score
                 total_crisis_score += normalized_score
             else:
@@ -91,27 +104,31 @@ class CrisisDetectionSystem:
         # Check for protective factors
         protective_score = 0
         protective_found = []
-        for factor in self.protective_factors:
-            if factor in text_clean:
-                protective_score += 1
-                protective_found.append(factor)
+        for category, keywords in self.protective_factors.items():
+            for keyword in keywords:
+                if keyword in text_clean:
+                    protective_score += 1
+                    protective_found.append({
+                        'category': category,
+                        'keyword': keyword
+                    })
         
         # Sentiment analysis
         blob = TextBlob(text)
         sentiment_polarity = blob.sentiment.polarity
         
         # Calculate final risk score
-        risk_score = total_crisis_score - (protective_score * 0.1) + abs(min(0, sentiment_polarity))
+        risk_score = total_crisis_score - (protective_score * 1) + abs(min(0, sentiment_polarity))
         
         # Determine risk level
-        if risk_score >= 0.8:
-            risk_level = 'critical'
-        elif risk_score >= 0.5:
-            risk_level = 'high'
-        elif risk_score >= 0.2:
-            risk_level = 'moderate'
+        if risk_score >= 15:
+            risk_level = 'CRÍTICO'
+        elif risk_score >= 10:
+            risk_level = 'ALTO'
+        elif risk_score >= 5:
+            risk_level = 'MEDIO'
         else:
-            risk_level = 'low'
+            risk_level = 'BAJO'
         
         return {
             'risk_score': risk_score,
@@ -120,66 +137,151 @@ class CrisisDetectionSystem:
             'indicators_found': indicators_found,
             'protective_factors': protective_found,
             'sentiment_polarity': sentiment_polarity,
-            'requires_immediate_attention': risk_score >= 0.5
+            'requires_immediate_attention': risk_score >= 15
         }
     
     def analyze_conversation_patterns(self, messages):
         """Analyze conversation patterns for crisis indicators"""
-        if not messages:
-            return {}
-        
         user_messages = [msg for msg in messages if msg.get('sender') == 'user']
         
-        if not user_messages:
-            return {}
+        if len(user_messages) < 2:
+            return {'insufficient_data': True}
         
         # Analyze each message
         message_analyses = []
         for msg in user_messages:
-            analysis = self.analyze_text_for_crisis(msg['content'])
-            analysis['timestamp'] = msg['timestamp']
-            analysis['message_id'] = msg.get('id', '')
-            message_analyses.append(analysis)
+            try:
+                timestamp = datetime.fromisoformat(msg.get('timestamp', '').replace('Z', '+00:00'))
+                analysis = self.analyze_text_for_crisis(msg.get('content', ''))
+                analysis['timestamp'] = timestamp
+                analysis['message_id'] = msg.get('id', '')
+                message_analyses.append(analysis)
+            except Exception as e:
+                print(f"Error analyzing message: {e}")
+                continue
         
-        # Calculate pattern indicators
+        # Sort by timestamp
+        message_analyses.sort(key=lambda x: x['timestamp'])
+        
+        # Detect patterns
+        patterns = self.detect_escalation_patterns(message_analyses)
+        
+        # Calculate overall risk assessment
         recent_messages = message_analyses[-5:]  # Last 5 messages
+        avg_recent_score = sum(msg['risk_score'] for msg in recent_messages) / len(recent_messages)
         
-        # Escalation detection
-        risk_scores = [analysis['risk_score'] for analysis in message_analyses]
-        recent_risk_scores = [analysis['risk_score'] for analysis in recent_messages]
+        highest_risk_message = max(message_analyses, key=lambda x: x['risk_score'])
         
-        escalation_detected = False
-        if len(recent_risk_scores) >= 3:
-            # Check if risk is increasing
-            trend = np.polyfit(range(len(recent_risk_scores)), recent_risk_scores, 1)[0]
-            escalation_detected = trend > 0.1
-        
-        # Frequency of crisis indicators
-        crisis_frequency = sum(1 for analysis in message_analyses if analysis['risk_score'] > 0.2) / len(message_analyses)
-        
-        # Time-based patterns
-        timestamps = [datetime.fromisoformat(msg['timestamp'].replace('Z', '+00:00')) for msg in user_messages]
-        if len(timestamps) > 1:
-            time_diffs = [(timestamps[i] - timestamps[i-1]).total_seconds() / 3600 for i in range(1, len(timestamps))]
-            avg_time_between = np.mean(time_diffs)
-            
-            # Rapid messaging might indicate crisis
-            rapid_messaging = avg_time_between < 1  # Less than 1 hour between messages
-        else:
-            rapid_messaging = False
-            avg_time_between = 0
+        # Check for immediate intervention needs
+        immediate_intervention = any(msg['requires_immediate_attention'] for msg in recent_messages)
         
         return {
-            'message_analyses': message_analyses,
-            'overall_risk_score': np.mean(risk_scores),
-            'max_risk_score': np.max(risk_scores),
-            'recent_risk_trend': np.mean(recent_risk_scores),
-            'escalation_detected': escalation_detected,
-            'crisis_frequency': crisis_frequency,
-            'rapid_messaging': rapid_messaging,
-            'avg_time_between_messages': avg_time_between,
-            'total_messages_analyzed': len(message_analyses)
+            'total_messages_analyzed': len(message_analyses),
+            'average_recent_risk_score': avg_recent_score,
+            'highest_risk_score': highest_risk_message['risk_score'],
+            'highest_risk_message': {
+                'content': highest_risk_message['content'][:100] + '...',
+                'timestamp': highest_risk_message['timestamp'].isoformat(),
+                'score': highest_risk_message['risk_score']
+            },
+            'escalation_patterns': patterns,
+            'immediate_intervention_required': immediate_intervention,
+            'risk_trend': self.calculate_risk_trend(message_analyses),
+            'recommendations': self.generate_recommendations(message_analyses, patterns)
         }
+    
+    def detect_escalation_patterns(self, analyses):
+        """Detect crisis escalation patterns"""
+        if len(analyses) < 3:
+            return {}
+        
+        patterns = {}
+        
+        # Check frequency escalation (more crisis messages over time)
+        recent_period = analyses[-7:]  # Last 7 messages
+        older_period = analyses[-14:-7] if len(analyses) >= 14 else analyses[:-7]
+        
+        if older_period:
+            recent_crisis_rate = sum(1 for msg in recent_period if msg['risk_score'] >= 5) / len(recent_period)
+            older_crisis_rate = sum(1 for msg in older_period if msg['risk_score'] >= 5) / len(older_period)
+            
+            patterns['frequency_escalation'] = {
+                'detected': recent_crisis_rate > older_crisis_rate * 1.5,
+                'recent_rate': recent_crisis_rate,
+                'older_rate': older_crisis_rate
+            }
+        
+        # Check severity escalation
+        recent_scores = [msg['risk_score'] for msg in analyses[-5:]]
+        older_scores = [msg['risk_score'] for msg in analyses[-10:-5]] if len(analyses) >= 10 else []
+        
+        if older_scores:
+            patterns['severity_escalation'] = {
+                'detected': sum(recent_scores) / len(recent_scores) > sum(older_scores) / len(older_scores) * 1.3,
+                'recent_avg': sum(recent_scores) / len(recent_scores),
+                'older_avg': sum(older_scores) / len(older_scores)
+            }
+        
+        # Check for persistent themes
+        crisis_categories = defaultdict(int)
+        for analysis in analyses[-10:]:  # Last 10 messages
+            for indicator in analysis.get('indicators_found', []):
+                crisis_categories[indicator.split(':')[0]] += 1
+        
+        persistent_themes = [cat for cat, count in crisis_categories.items() if count >= 3]
+        patterns['persistent_themes'] = {
+            'detected': len(persistent_themes) > 0,
+            'themes': persistent_themes
+        }
+        
+        return patterns
+
+    def calculate_risk_trend(self, analyses):
+        """Calculate the overall risk trend."""
+        if len(analyses) < 3:
+            return 'INSUFFICIENT_DATA'
+        
+        recent_scores = [msg['risk_score'] for msg in analyses[-3:]]
+        older_scores = [msg['risk_score'] for msg in analyses[-6:-3]] if len(analyses) >= 6 else [0]
+        
+        recent_avg = sum(recent_scores) / len(recent_scores)
+        older_avg = sum(older_scores) / len(older_scores)
+        
+        if recent_avg > older_avg * 1.5:
+            return 'ESCALATING'
+        elif recent_avg < older_avg * 0.7:
+            return 'IMPROVING'
+        else:
+            return 'STABLE'
+
+    def generate_recommendations(self, analyses, patterns):
+        """Generate intervention recommendations based on analysis."""
+        recommendations = []
+        
+        # Check latest message risk
+        if analyses:
+            latest = analyses[-1]
+            if latest['risk_score'] >= 15:
+                recommendations.append("🚨 INTERVENCIÓN INMEDIATA: Contactar servicios de emergencia o línea de crisis")
+                recommendations.append("📞 Proporcionar números de emergencia: 911 o línea nacional de prevención del suicidio")
+            elif latest['risk_score'] >= 10:
+                recommendations.append("⚠️ RIESGO ALTO: Programar sesión urgente con profesional de salud mental")
+                recommendations.append("👥 Activar red de apoyo familiar/social")
+        
+        # Pattern-based recommendations
+        if patterns.get('frequency_escalation', {}).get('detected'):
+            recommendations.append("📈 Patrón de escalación detectado: Aumentar frecuencia de monitoreo")
+        
+        if patterns.get('persistent_themes', {}).get('detected'):
+            themes = patterns['persistent_themes']['themes']
+            recommendations.append(f"🔄 Temas persistentes detectados ({', '.join(themes)}): Enfocar terapia en estos aspectos")
+        
+        # General recommendations
+        protective_factors_count = sum(len(msg.get('protective_factors', [])) for msg in analyses[-5:])
+        if protective_factors_count < 2:
+            recommendations.append("🛡️ Fortalecer factores protectores: Identificar y desarrollar estrategias de afrontamiento")
+        
+        return recommendations
     
     def detect_anomalies(self, user_data):
         """Detect anomalous patterns that might indicate crisis"""
@@ -233,7 +335,7 @@ class CrisisDetectionSystem:
         }
         
         # Generate specific recommendations based on risk level
-        if risk_level == 'critical':
+        if risk_level == 'CRÍTICO':
             alert['recommendations'] = [
                 'Contactar inmediatamente a servicios de emergencia',
                 'Notificar al terapeuta asignado',
@@ -245,14 +347,14 @@ class CrisisDetectionSystem:
                 'Emergencias: 911',
                 'Crisis Text Line: Envía HOLA al 741741'
             ]
-        elif risk_level == 'high':
+        elif risk_level == 'ALTO':
             alert['recommendations'] = [
                 'Programar cita urgente con terapeuta',
                 'Aumentar frecuencia de seguimiento',
                 'Activar red de apoyo familiar/social',
                 'Considerar ajuste en plan de tratamiento'
             ]
-        elif risk_level == 'moderate':
+        elif risk_level == 'MEDIO':
             alert['recommendations'] = [
                 'Programar seguimiento en 24-48 horas',
                 'Ofrecer recursos de autoayuda',
@@ -281,19 +383,19 @@ class CrisisDetectionSystem:
             anomaly_analysis = self.detect_anomalies(conversation_analysis['message_analyses'])
         
         # Generate overall assessment
-        overall_risk_score = conversation_analysis.get('overall_risk_score', 0)
-        max_risk_score = conversation_analysis.get('max_risk_score', 0)
-        escalation_detected = conversation_analysis.get('escalation_detected', False)
+        overall_risk_score = conversation_analysis.get('average_recent_risk_score', 0)
+        max_risk_score = conversation_analysis.get('highest_risk_score', 0)
+        escalation_detected = any(pattern.get('detected') for pattern in conversation_analysis.get('escalation_patterns', {}).values())
         
         # Determine final risk level
-        if max_risk_score >= 0.8 or escalation_detected:
-            final_risk_level = 'critical'
-        elif max_risk_score >= 0.5 or overall_risk_score >= 0.4:
-            final_risk_level = 'high'
-        elif max_risk_score >= 0.2 or overall_risk_score >= 0.15:
-            final_risk_level = 'moderate'
+        if max_risk_score >= 15 or escalation_detected:
+            final_risk_level = 'CRÍTICO'
+        elif max_risk_score >= 10 or overall_risk_score >= 10:
+            final_risk_level = 'ALTO'
+        elif max_risk_score >= 5 or overall_risk_score >= 5:
+            final_risk_level = 'MEDIO'
         else:
-            final_risk_level = 'low'
+            final_risk_level = 'BAJO'
         
         # Create comprehensive assessment
         assessment = {
@@ -308,11 +410,11 @@ class CrisisDetectionSystem:
         }
         
         # Generate crisis alert if needed
-        if final_risk_level in ['critical', 'high']:
+        if final_risk_level in ['CRÍTICO', 'ALTO']:
             crisis_alert = self.generate_crisis_alert({
                 'risk_level': final_risk_level,
                 'risk_score': max_risk_score,
-                'requires_immediate_attention': final_risk_level == 'critical'
+                'requires_immediate_attention': final_risk_level == 'CRÍTICO'
             })
             assessment['crisis_alert'] = crisis_alert
         
@@ -352,7 +454,7 @@ class CrisisDetectionSystem:
         conv_analysis = assessment.get('conversation_analysis', {})
         if conv_analysis:
             print(f"\nMensajes analizados: {conv_analysis.get('total_messages_analyzed', 0)}")
-            print(f"Frecuencia de crisis: {conv_analysis.get('crisis_frequency', 0):.2%}")
+            print(f"Frecuencia de crisis: {conv_analysis.get('average_recent_risk_score', 0):.2%}")
             print(f"Mensajería rápida detectada: {'Sí' if conv_analysis.get('rapid_messaging') else 'No'}")
 
 # Demo function
@@ -385,6 +487,12 @@ def run_crisis_detection_demo():
             'content': 'He estado pensando en hacerme daño. El dolor es insoportable.',
             'sender': 'user',
             'timestamp': '2024-01-15T12:30:00Z'
+        },
+        {
+            'id': '5',
+            'content': 'Hablé con mi familia y me siento un poco mejor, voy a buscar ayuda profesional.',
+            'sender': 'user',
+            'timestamp': '2024-01-16T18:00:00Z'
         }
     ]
     

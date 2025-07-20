@@ -8,9 +8,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from textblob import TextBlob
 import re
-from collections import Counter
+from collections import defaultdict, Counter
 import warnings
+import statistics
 warnings.filterwarnings('ignore')
+
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class MentalHealthAnalyzer:
     def __init__(self):
@@ -272,64 +276,231 @@ class MentalHealthAnalyzer:
             'avg_message_length': conversation_patterns.get('avg_message_length', 0)
         }
 
-# Example usage and demo data
-def run_analysis_demo():
-    """Run analysis with demo data"""
-    analyzer = MentalHealthAnalyzer()
+def analyze_sentiment_keywords(message: str) -> Dict[str, int]:
+    """Analyze sentiment based on keywords in the message."""
+    positive_keywords = [
+        'feliz', 'bien', 'mejor', 'genial', 'excelente', 'bueno', 'alegre',
+        'contento', 'optimista', 'esperanzado', 'tranquilo', 'relajado',
+        'motivado', 'confiado', 'satisfecho', 'agradecido'
+    ]
     
-    # Demo messages data
-    demo_messages = [
+    negative_keywords = [
+        'triste', 'mal', 'deprimido', 'ansioso', 'preocupado', 'estresado',
+        'agobiado', 'desesperado', 'solo', 'vacío', 'perdido', 'confundido',
+        'enojado', 'frustrado', 'cansado', 'agotado', 'desesperanzado'
+    ]
+    
+    crisis_keywords = [
+        'suicidio', 'morir', 'muerte', 'acabar', 'terminar', 'no puedo más',
+        'sin salida', 'desesperado', 'no vale la pena', 'lastimar', 'daño'
+    ]
+    
+    message_lower = message.lower()
+    
+    positive_count = sum(1 for word in positive_keywords if word in message_lower)
+    negative_count = sum(1 for word in negative_keywords if word in message_lower)
+    crisis_count = sum(1 for word in crisis_keywords if word in message_lower)
+    
+    return {
+        'positive': positive_count,
+        'negative': negative_count,
+        'crisis': crisis_count
+    }
+
+def calculate_sentiment_score(sentiment_counts: Dict[str, int]) -> float:
+    """Calculate a sentiment score from -1 (very negative) to 1 (very positive)."""
+    positive = sentiment_counts['positive']
+    negative = sentiment_counts['negative']
+    crisis = sentiment_counts['crisis']
+    
+    # Crisis keywords have double weight
+    total_negative = negative + (crisis * 2)
+    
+    if positive + total_negative == 0:
+        return 0.0
+    
+    return (positive - total_negative) / (positive + total_negative)
+
+def analyze_message_patterns(messages: List[Dict]) -> Dict[str, Any]:
+    """Analyze patterns in chat messages."""
+    if not messages:
+        return {}
+    
+    # Time-based analysis
+    hourly_activity = defaultdict(int)
+    daily_activity = defaultdict(int)
+    weekly_activity = defaultdict(int)
+    
+    # Sentiment analysis
+    sentiment_scores = []
+    sentiment_over_time = []
+    
+    # Message characteristics
+    message_lengths = []
+    response_times = []
+    
+    # Topic analysis
+    common_topics = Counter()
+    
+    for i, message in enumerate(messages):
+        try:
+            # Parse timestamp
+            timestamp = datetime.fromisoformat(message.get('timestamp', '').replace('Z', '+00:00'))
+            
+            # Time-based patterns
+            hourly_activity[timestamp.hour] += 1
+            daily_activity[timestamp.strftime('%A')] += 1
+            weekly_activity[timestamp.isocalendar()[1]] += 1
+            
+            # Only analyze user messages (not Ana's responses)
+            if message.get('sender') == 'user':
+                content = message.get('message', '')
+                
+                # Sentiment analysis
+                sentiment_counts = analyze_sentiment_keywords(content)
+                sentiment_score = calculate_sentiment_score(sentiment_counts)
+                sentiment_scores.append(sentiment_score)
+                sentiment_over_time.append({
+                    'timestamp': timestamp.isoformat(),
+                    'score': sentiment_score,
+                    'counts': sentiment_counts
+                })
+                
+                # Message characteristics
+                message_lengths.append(len(content))
+                
+                # Simple topic extraction (common words)
+                words = re.findall(r'\b\w+\b', content.lower())
+                # Filter out common stop words
+                stop_words = {'el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 'da', 'su', 'por', 'son', 'con', 'para', 'al', 'del', 'los', 'las', 'me', 'mi', 'tu', 'si', 'yo', 'he', 'ha', 'muy', 'más', 'pero', 'como', 'todo', 'una', 'está', 'ser', 'hacer', 'puede', 'bien', 'ya', 'vez', 'día', 'vida', 'tiempo'}
+                meaningful_words = [word for word in words if len(word) > 3 and word not in stop_words]
+                common_topics.update(meaningful_words)
+                
+                # Calculate response time if there's a previous message
+                if i > 0:
+                    prev_timestamp = datetime.fromisoformat(messages[i-1].get('timestamp', '').replace('Z', '+00:00'))
+                    response_time = (timestamp - prev_timestamp).total_seconds() / 60  # in minutes
+                    if response_time < 60:  # Only consider responses within an hour
+                        response_times.append(response_time)
+        
+        except Exception as e:
+            print(f"Error processing message {i}: {e}")
+            continue
+    
+    # Calculate statistics
+    analysis_results = {
+        'total_messages': len(messages),
+        'user_messages': len([m for m in messages if m.get('sender') == 'user']),
+        'ana_responses': len([m for m in messages if m.get('sender') == 'ana']),
+        'time_patterns': {
+            'hourly_activity': dict(hourly_activity),
+            'daily_activity': dict(daily_activity),
+            'weekly_activity': dict(weekly_activity),
+            'most_active_hour': max(hourly_activity.items(), key=lambda x: x[1])[0] if hourly_activity else None,
+            'most_active_day': max(daily_activity.items(), key=lambda x: x[1])[0] if daily_activity else None
+        },
+        'sentiment_analysis': {
+            'average_sentiment': statistics.mean(sentiment_scores) if sentiment_scores else 0,
+            'sentiment_trend': sentiment_over_time[-10:] if sentiment_over_time else [],  # Last 10 messages
+            'positive_messages': len([s for s in sentiment_scores if s > 0.1]),
+            'negative_messages': len([s for s in sentiment_scores if s < -0.1]),
+            'neutral_messages': len([s for s in sentiment_scores if -0.1 <= s <= 0.1])
+        },
+        'message_characteristics': {
+            'average_length': statistics.mean(message_lengths) if message_lengths else 0,
+            'median_length': statistics.median(message_lengths) if message_lengths else 0,
+            'average_response_time': statistics.mean(response_times) if response_times else 0,
+            'median_response_time': statistics.median(response_times) if response_times else 0
+        },
+        'common_topics': dict(common_topics.most_common(10)),
+        'analysis_timestamp': datetime.now().isoformat()
+    }
+    
+    return analysis_results
+
+def main():
+    """Main function to run chat data analysis."""
+    print("🔍 Iniciando análisis de datos de chat...")
+    
+    # Sample data for demonstration (in a real scenario, this would come from MongoDB)
+    sample_messages = [
         {
-            'id': '1',
-            'content': 'Hola Ana, me siento un poco triste hoy. He tenido un día difícil en el trabajo.',
             'sender': 'user',
+            'message': 'Hola Ana, me siento muy triste hoy',
             'timestamp': '2024-01-15T10:30:00Z'
         },
         {
-            'id': '2',
-            'content': 'Entiendo cómo te sientes. Es normal tener días difíciles. ¿Puedes contarme más?',
             'sender': 'ana',
-            'timestamp': '2024-01-15T10:31:00Z'
+            'message': 'Hola, lamento escuchar que te sientes triste. ¿Puedes contarme qué está pasando?',
+            'timestamp': '2024-01-15T10:30:30Z'
         },
         {
-            'id': '3',
-            'content': 'Gracias por escuchar. Me siento mejor después de hablar contigo. Creo que necesitaba desahogarme.',
             'sender': 'user',
+            'message': 'He tenido problemas en el trabajo y me siento muy estresado y ansioso',
+            'timestamp': '2024-01-15T10:32:00Z'
+        },
+        {
+            'sender': 'ana',
+            'message': 'Entiendo que el estrés laboral puede ser muy abrumador. ¿Has intentado alguna técnica de relajación?',
+            'timestamp': '2024-01-15T10:32:45Z'
+        },
+        {
+            'sender': 'user',
+            'message': 'No, no sé por dónde empezar. Me siento perdido',
             'timestamp': '2024-01-15T10:35:00Z'
         },
         {
-            'id': '4',
-            'content': 'Hoy me siento mucho mejor. Dormí bien y tengo energía para enfrentar el día.',
             'sender': 'user',
+            'message': 'Hoy me siento un poco mejor, gracias por la ayuda de ayer',
             'timestamp': '2024-01-16T09:15:00Z'
-        },
-        {
-            'id': '5',
-            'content': 'Estoy preocupado por mi futuro. A veces siento que no puedo más con la ansiedad.',
-            'sender': 'user',
-            'timestamp': '2024-01-17T14:20:00Z'
         }
     ]
     
-    # Run analysis
-    report = analyzer.generate_report(user_id=1, messages=demo_messages)
+    # Perform analysis
+    results = analyze_message_patterns(sample_messages)
     
-    # Print summary
-    print("\n=== RESUMEN DEL ANÁLISIS ===")
-    print(f"Usuario ID: {report['user_id']}")
-    print(f"Fecha de análisis: {report['analysis_date']}")
-    print(f"Total de mensajes analizados: {len(report['mood_timeline'])}")
+    # Display results
+    print("\n📊 RESULTADOS DEL ANÁLISIS:")
+    print("=" * 50)
     
-    if report['summary_stats']:
-        stats = report['summary_stats']
-        print(f"Sentimiento promedio: {stats['avg_sentiment']:.3f}")
-        print(f"Puntuación de crisis promedio: {stats['avg_crisis_score']:.3f}")
+    print(f"\n📈 Estadísticas Generales:")
+    print(f"  • Total de mensajes: {results['total_messages']}")
+    print(f"  • Mensajes del usuario: {results['user_messages']}")
+    print(f"  • Respuestas de Ana: {results['ana_responses']}")
     
-    print(f"\nInsights generados: {len(report['insights'])}")
-    for insight in report['insights']:
-        print(f"- [{insight['priority'].upper()}] {insight['message']}")
+    if results.get('time_patterns'):
+        tp = results['time_patterns']
+        print(f"\n⏰ Patrones de Tiempo:")
+        print(f"  • Hora más activa: {tp.get('most_active_hour', 'N/A')}:00")
+        print(f"  • Día más activo: {tp.get('most_active_day', 'N/A')}")
+    
+    if results.get('sentiment_analysis'):
+        sa = results['sentiment_analysis']
+        print(f"\n😊 Análisis de Sentimientos:")
+        print(f"  • Sentimiento promedio: {sa.get('average_sentiment', 0):.2f} (-1 a 1)")
+        print(f"  • Mensajes positivos: {sa.get('positive_messages', 0)}")
+        print(f"  • Mensajes negativos: {sa.get('negative_messages', 0)}")
+        print(f"  • Mensajes neutrales: {sa.get('neutral_messages', 0)}")
+    
+    if results.get('message_characteristics'):
+        mc = results['message_characteristics']
+        print(f"\n📝 Características de Mensajes:")
+        print(f"  • Longitud promedio: {mc.get('average_length', 0):.1f} caracteres")
+        print(f"  • Tiempo de respuesta promedio: {mc.get('average_response_time', 0):.1f} minutos")
+    
+    if results.get('common_topics'):
+        print(f"\n🏷️ Temas Comunes:")
+        for topic, count in list(results['common_topics'].items())[:5]:
+            print(f"  • {topic}: {count} menciones")
+    
+    print(f"\n✅ Análisis completado: {results.get('analysis_timestamp', 'N/A')}")
+    
+    # Save results to file
+    output_file = 'chat_analysis_results.json'
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    
+    print(f"📄 Resultados guardados en: {output_file}")
 
 if __name__ == "__main__":
-    print("Iniciando análisis de salud mental...")
-    run_analysis_demo()
-    print("Análisis completado.")
+    main()
