@@ -17,8 +17,14 @@ import {
   AlertTriangle,
   BarChart3,
 } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
-export default function AdminDashboard() {
+function AdminDashboardContent() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
+
   const [systemStats] = useState({
     totalUsers: 1247,
     activePsychologists: 45,
@@ -34,6 +40,11 @@ export default function AdminDashboard() {
     { id: 3, type: "ai_interaction", user: "Carlos Ruiz", time: "Hace 18 min", status: "success" },
     { id: 4, type: "system_alert", user: "Sistema", time: "Hace 1 hora", status: "warning" },
   ])
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -51,13 +62,14 @@ export default function AdminDashboard() {
               </Badge>
             </div>
             <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Hola, {user?.name}</span>
               <Button variant="ghost" size="sm">
                 <Bell className="w-4 h-4" />
               </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -308,5 +320,13 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function AdminDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDashboardContent />
+    </ProtectedRoute>
   )
 }

@@ -18,8 +18,14 @@ import {
   Video,
   MessageSquare,
 } from "lucide-react"
+import { ProtectedRoute } from "@/components/protected-route"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
-export default function PsychologistDashboard() {
+function PsychologistDashboardContent() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
+
   const [todayAppointments] = useState([
     { id: 1, patient: "María González", time: "09:00", status: "confirmed", type: "video" },
     { id: 2, patient: "Carlos Ruiz", time: "10:30", status: "pending", type: "chat" },
@@ -32,6 +38,11 @@ export default function PsychologistDashboard() {
     { id: 2, name: "Carlos Ruiz", lastSession: "2024-01-09", progress: "Bueno", mood: 72 },
     { id: 3, name: "Ana López", lastSession: "2024-01-08", progress: "Regular", mood: 65 },
   ])
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,13 +60,14 @@ export default function PsychologistDashboard() {
               </Badge>
             </div>
             <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Hola, {user?.name}</span>
               <Button variant="ghost" size="sm">
                 <Bell className="w-4 h-4" />
               </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -66,8 +78,9 @@ export default function PsychologistDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Buenos días, Dr. García</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Buenos días, {user?.name}</h1>
           <p className="text-gray-600">Tienes 4 citas programadas para hoy. Aquí está tu resumen diario.</p>
+          {user?.specialization && <p className="text-sm text-teal-600 mt-1">Especialización: {user.specialization}</p>}
         </div>
 
         {/* Quick Stats */}
@@ -306,5 +319,13 @@ export default function PsychologistDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function PsychologistDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["psychologist"]}>
+      <PsychologistDashboardContent />
+    </ProtectedRoute>
   )
 }

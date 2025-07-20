@@ -7,10 +7,20 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MessageCircle, Brain, Heart, TrendingUp, Clock, User, Settings, LogOut, Bell } from "lucide-react"
 import Link from "next/link"
+import { ProtectedRoute } from "@/components/protected-route"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
-export default function PatientDashboard() {
+function PatientDashboardContent() {
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const [moodScore, setMoodScore] = useState(75)
   const [weeklyProgress, setWeeklyProgress] = useState(68)
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -23,15 +33,19 @@ export default function PatientDashboard() {
                 <Brain className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-bold text-gray-900">Eunoia</span>
+              <Badge variant="secondary" className="ml-2">
+                Paciente
+              </Badge>
             </div>
             <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Hola, {user?.name}</span>
               <Button variant="ghost" size="sm">
                 <Bell className="w-4 h-4" />
               </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -42,7 +56,7 @@ export default function PatientDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Bienvenido de vuelta, María</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Bienvenido de vuelta, {user?.name}</h1>
           <p className="text-gray-600">Aquí tienes un resumen de tu progreso y próximas actividades.</p>
         </div>
 
@@ -232,5 +246,13 @@ export default function PatientDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function PatientDashboard() {
+  return (
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <PatientDashboardContent />
+    </ProtectedRoute>
   )
 }

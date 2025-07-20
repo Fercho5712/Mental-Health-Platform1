@@ -21,13 +21,13 @@ export default function HomePage() {
               <Link href="#inicio" className="text-gray-700 hover:text-teal-600">
                 Inicio
               </Link>
-              <Link href="#servicios" className="text-gray-700 hover:text-teal-600">
+              <Link href="/servicios" className="text-gray-700 hover:text-teal-600">
                 Servicios
               </Link>
-              <Link href="#nosotros" className="text-gray-700 hover:text-teal-600">
+              <Link href="/nosotros" className="text-gray-700 hover:text-teal-600">
                 Nosotros
               </Link>
-              <Link href="#contacto" className="text-gray-700 hover:text-teal-600">
+              <Link href="/contacto" className="text-gray-700 hover:text-teal-600">
                 Contacto
               </Link>
             </nav>
@@ -255,7 +255,7 @@ export default function HomePage() {
               <h3 className="font-semibold mb-4">Empresa</h3>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <Link href="#" className="hover:text-white">
+                  <Link href="/nosotros" className="hover:text-white">
                     Sobre Nosotros
                   </Link>
                 </li>
@@ -265,7 +265,7 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white">
+                  <Link href="/contacto" className="hover:text-white">
                     Contacto
                   </Link>
                 </li>
